@@ -45,7 +45,8 @@ function ProductContent() {
   // Function to fetch book data
   const fetchBookById = async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:3000/book/${id}`);
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${apiBase}/book/${id}`);
       if (response.ok) {
         const data = await response.json();
         console.log('📖 Datos del libro:', data);

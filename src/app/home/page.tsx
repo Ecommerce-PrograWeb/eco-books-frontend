@@ -29,7 +29,8 @@ export default function Home() {
   // Function to fetch books by category
   const fetchBooksByCategory = async (categoryId: string) => {
     try {
-      const response = await fetch(`http://localhost:3000/book/category/${categoryId}`);
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${apiBase}/book/category/${categoryId}`);
       const data = await response.json();
       if (Array.isArray(data)) {
         setBooks(data); // Update state only if response is an array
