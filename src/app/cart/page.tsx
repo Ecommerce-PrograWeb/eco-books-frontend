@@ -6,7 +6,6 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import styles from "./cart.module.css";
 import Image from "next/image";
-import { getApiBase, jsonFetch } from "../lib/api";
 
 interface CartItem {
   book_id: number;
@@ -20,7 +19,6 @@ export default function CartPage() {
   const router = useRouter();
   const [items, setItems] = useState<CartItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
@@ -29,7 +27,6 @@ export default function CartPage() {
     setIsLoggedIn(hasUser);
     if (!hasUser) router.push("/login?next=/cart");
   }, [router]);
-
 
   useEffect(() => {
     try {
@@ -43,7 +40,6 @@ export default function CartPage() {
     }
     setIsLoaded(true);
   }, []);
-
 
   useEffect(() => {
     if (isLoaded) {
@@ -67,45 +63,12 @@ export default function CartPage() {
 
   const subtotal = items.reduce((s, it) => s + it.purchase_price * it.quantity, 0);
 
-  const handleCheckout = async () => {
-    setErr(null);
-    if (items.length === 0) return;
-
-    try {
-      setBusy(true);
-      const API = getApiBase();
-
-      await jsonFetch<{ message: string }>(`${API}/cart`, {
-        method: "POST",
-        body: JSON.stringify({ total: subtotal }),
-      });
-
-      
-      const itemsPayload = items.map(it => ({
-        book_id: it.book_id,
-        price: it.purchase_price,
-        quantity: it.quantity,
-      }));
-
-      await jsonFetch(`${API}/order/checkout`, {
-        method: "POST",
-        body: JSON.stringify({
-          items: itemsPayload,
-          total: subtotal,
-          
-        }),
-      });
-
-      localStorage.setItem("cart", JSON.stringify([]));
-      setItems([]);
-      const orderNumber = Date.now().toString().slice(-6);
-      router.push(`/thankyou?order=${orderNumber}`);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "No se pudo procesar tu pedido";
-      setErr(message);
-    } finally {
-      setBusy(false);
+  const goToPayment = () => {
+    if (items.length === 0) {
+      setErr("Tu carrito está vacío.");
+      return;
     }
+    router.push("/payment");
   };
 
   return (
@@ -167,11 +130,11 @@ export default function CartPage() {
                 <strong>Q{subtotal.toFixed(2)}</strong>
               </div>
               <button
-                disabled={busy || !isLoggedIn}
+                disabled={!isLoggedIn}
                 className={styles.checkout}
-                onClick={handleCheckout}
+                onClick={goToPayment}
               >
-                {busy ? "Procesando..." : "Pedir Ahora"}
+                Pedir Ahora
               </button>
             </aside>
           </section>

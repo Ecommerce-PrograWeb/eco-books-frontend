@@ -1,0 +1,85 @@
+name: E2E Tests (Playwright)
+
+on:
+  push:
+    branches: [ Tests, main ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'public/**'
+      - 'next.config.*'
+      - 'package.json'
+      - 'playwright.config.*'
+      - '.github/workflows/e2e-tests.yml'
+  pull_request:
+    branches: [ Tests, main ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'public/**'
+      - 'next.config.*'
+      - 'package.json'
+      - 'playwright.config.*'
+      - '.github/workflows/e2e-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    name: End-to-End Tests (frontend)
+    timeout-minutes: 15
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22        # puedes dejar 20 si quieres que sea IGUAL al original
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: 📦 Install frontend dependencies
+        run: npm ci --no-audit --no-fund || npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: 🎭 Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: 🧱 Build frontend
+        run: npm run build
+
+      - name: 🚀 Start frontend on port 3001
+        run: |
+          PORT=3001 npm start > server.log 2>&1 &
+          echo "Servidor arrancando en 3001..."
+          sleep 15
+          echo "==== LOG DEL SERVIDOR (primeras líneas) ===="
+          sed -n '1,80p' server.log || true
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: ⏳ Wait for frontend to be ready (3001)
+        run: npx wait-on http://127.0.0.1:3001/home --timeout 120000
+
+      - name: 🧪 Run E2E tests
+        run: npx playwright test --reporter=list,html
+        env:
+          CI: true
+          PLAYWRIGHT_BASE_URL: http://localhost:3001
+
+      - name: 📊 Upload Playwright HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
+
+      - name: 📸 Upload test screenshots/videos
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
