@@ -1,63 +1,147 @@
 "use client";
+
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import CardForm from "./Cardform";
-import CardPreview from "./CardPreview";
-import "./payments.css";
+import styles from "./payment.module.css";
+import { getApiBase, jsonFetch } from "../lib/api";
 
-type Brand = "visa" | "mastercard" | "desconocida";
+interface CartItem {
+  book_id: number;
+  name: string;
+  purchase_price: number;
+  quantity: number;
+}
 
-export default function PaymentsPage() {
+export default function PaymentPage() {
   const router = useRouter();
-  const [preview, setPreview] = useState<{ number: string; name: string; exp: string; brand: Brand }>({
-    number: "",
-    name: "",
-    exp: "",
-    brand: "desconocida",
-  });
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [subtotal, setSubtotal] = useState(0);
+  const [method, setMethod] = useState("tarjeta");
+  const [name, setName] = useState("");
+  const [card, setCard] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const goBackOrCart = () => {
+  useEffect(() => {
     try {
-      const ref = document.referrer;
-      if (ref && new URL(ref).origin === window.location.origin) router.back();
-      else router.push("/cart");
+      const raw = localStorage.getItem("cart");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setItems(parsed);
+          const total = parsed.reduce(
+            (sum: number, it: CartItem) => sum + it.purchase_price * it.quantity,
+            0
+          );
+          setSubtotal(total);
+        }
+      }
     } catch {
-      router.push("/cart");
+      setItems([]);
+    }
+  }, []);
+
+  const handlePayment = async () => {
+    if (items.length === 0) {
+      setError("Tu carrito está vacío.");
+      return;
+    }
+
+    if (method === "tarjeta" && (!name || !card)) {
+      setError("Por favor completa los datos de la tarjeta.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      const API = getApiBase();
+
+      const itemsPayload = items.map(it => ({
+        book_id: it.book_id,
+        price: it.purchase_price,
+        quantity: it.quantity,
+      }));
+
+      await jsonFetch(`${API}/order/checkout`, {
+        method: "POST",
+        body: JSON.stringify({
+          items: itemsPayload,
+          total: subtotal,
+          method,
+        }),
+      });
+
+      localStorage.setItem("cart", JSON.stringify([]));
+      const orderNumber = Date.now().toString().slice(-6);
+      router.push(`/thankyou?order=${orderNumber}`);
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "Error al procesar el pago.";
+      setError(message);
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
     <>
-      <div className="ty-bg" aria-hidden />
       <Header />
-      <main className="pay">
-        <section className="pay-wrap">
-          <div className="pay-module">
-            <header className="pay-module__head">
-              <h1 className="pay-title">Checkout</h1>
-            </header>
+      <main className={styles.wrapper}>
+        <h1 className={styles.title}>Pago</h1>
 
-            <div className="pay-grid">
-              <div className="pay-preview">
-                <CardPreview
-                  number={preview.number}
-                  name={preview.name}
-                  exp={preview.exp}
-                  brand={preview.brand}
-                />
-              </div>
+        {error && <p className={styles.error}>{error}</p>}
 
-              <div className="pay-card">
-                <CardForm
-                  onPreviewChange={(p) => setPreview(p)}
-                  onSubmitToken={async () => {}}
-                  onSuccess={goBackOrCart}
+        <section className={styles.form}>
+          <label className={styles.label}>
+            Método de pago:
+            <select
+              value={method}
+              onChange={e => setMethod(e.target.value)}
+              className={styles.select}
+            >
+              <option value="tarjeta">Tarjeta de crédito/débito</option>
+              <option value="efectivo">Efectivo (contra entrega)</option>
+            </select>
+          </label>
+
+          {method === "tarjeta" && (
+            <>
+              <label className={styles.label}>
+                Nombre en la tarjeta:
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Ejemplo: Juan Pérez"
                 />
-              </div>
-            </div>
+              </label>
+              <label className={styles.label}>
+                Número de tarjeta:
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={card}
+                  onChange={e => setCard(e.target.value)}
+                  placeholder="XXXX-XXXX-XXXX-XXXX"
+                />
+              </label>
+            </>
+          )}
+
+          <div className={styles.summary}>
+            <strong>Total a pagar: Q{subtotal.toFixed(2)}</strong>
           </div>
+
+          <button
+            onClick={handlePayment}
+            disabled={busy}
+            className={styles.payBtn}
+          >
+            {busy ? "Procesando..." : "Confirmar pago"}
+          </button>
         </section>
       </main>
       <Footer />
