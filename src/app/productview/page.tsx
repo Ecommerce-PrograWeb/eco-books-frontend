@@ -10,7 +10,7 @@ import styles from './productview.module.css';
 // Define the interface for the book
 interface Book {
   book_id: number;
-  name: string;
+  name: string
   cover: string;
   description: string;
   publication_date: string;
